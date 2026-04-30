@@ -1,0 +1,4 @@
+pandas>=2.0
+torch>=2.0
+transformers>=4.35
+tqdm

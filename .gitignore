@@ -1,0 +1,21 @@
+# Data files (too large for git, downloadable separately)
+all_speeches_with_topic_probs.csv
+topic_speeches/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Output (regenerable)
+scores/
+*.log
