@@ -36,7 +36,8 @@ The pipeline:
 | [requirements.txt](requirements.txt) | Python dependencies |
 | [ctm_topics.csv](ctm_topics.csv) | Top-20 words per CTM topic |
 | [ctm_topics.json](ctm_topics.json) | CTM topic metadata (JSON form) |
-| [scores_topic8_pilot.csv](scores_topic8_pilot.csv) | Sample MLM output (Topic 8 pilot, 500 segments / 1097 mentions) |
+| [scores/](scores/) | MLM output: one CSV per topic + run logs |
+| [scores_topic8_pilot.csv](scores_topic8_pilot.csv) | Original 500-segment pilot output (kept as a smaller reference) |
 
 ## Setup
 
@@ -81,6 +82,55 @@ One row per (segment, sentence, mention). Columns:
 - `masked_sentence` — the input fed to BERT
 - `animal`, `cargo`, `disease`, `flood_tide`, `machine`, `vermin`,
   `invasion`, `threat` — per-category probability mass at the `[MASK]` slot
+
+## Run results
+
+All ten CTM topics scored end-to-end on a single RTX 4070 Ti
+(`bert-base-uncased`, batch size 64). Total: **273,475 segments processed,
+354,600 mentions scored** in ~19 minutes of GPU time (across two runs).
+
+| Topic | Theme | Segments | Mentions | Mentions / segment |
+|---|---|---:|---:|---:|
+| 0 | Chinese-era legal / citizenship | 30,974 | 44,168 | 1.43 |
+| 1 | (procedural junk) | 24,663 | 21,074 | 0.85 |
+| 2 | border / enforcement | 30,845 | 12,332 | **0.40** |
+| 3 | refugees / asylum | 29,683 | 72,831 | **2.45** |
+| 4 | heritage / contributions | 31,362 | 55,348 | 1.77 |
+| 5 | welfare / services | 25,876 | 40,980 | 1.58 |
+| 6 | DACA / Dreamers | 30,665 | 26,003 | 0.85 |
+| 7 | (incoherent junk) | 34,647 | 14,522 | 0.42 |
+| 8 | labor / agriculture | 26,951 | 25,652 | 0.95 |
+| 9 | quotas / national origins | 24,844 | 41,690 | 1.68 |
+
+### Early observations (pre-aggregation)
+
+- **Mention density itself is a finding.** Topic 2 (border / enforcement) has
+  the lowest mention density of any *substantive* topic — even lower than the
+  procedural-junk topics. Border discourse evidently uses more abstract framing
+  ("the border", "illegal immigration", "the law") rather than directly naming
+  people. Topic 3 (refugees) is the opposite extreme at 2.45 mentions/segment
+  — refugee discourse is heavily group-naming.
+- **Junk topics (1, 7) produce mentions but at low density.** Useful as a
+  baseline: any per-category metaphor scores from these topics should look
+  near-uniform / low-signal. If a substantive topic's per-category profile
+  doesn't look distinguishably different, that's a methodological warning.
+- **Pilot validation** (Topic 8, 500 segments, 1,097 mentions): score
+  distributions track intuition. Labor speeches show high signal on
+  `machine` / `cargo` / `animal` / `invasion` (max scores 0.13–0.34) and
+  near-zero signal on `flood_tide` / `vermin` / `disease` / `threat` (max
+  ≤0.007). Top-scoring sentences contain a mixture of genuine metaphor
+  ("the costs of *importing* Mexican [MASK]" → cargo) and BERT artifacts
+  ("Mexican [MASK] must be *recruited*" → invasion via military
+  vocabulary). Per-sentence scores are noisy by design; aggregate
+  topic-level means are the right unit of analysis. See
+  [scores_topic8_pilot.csv](scores_topic8_pilot.csv) for the full pilot
+  output.
+- **`invasion` and `threat` should stay separate categories.** On the
+  Topic 8 pilot, the two are nearly uncorrelated (Pearson r = 0.07) and
+  threat scores are ~100× smaller in magnitude than invasion scores.
+  Combining the two would effectively reduce to just `invasion` and
+  destroy any threat-specific signal in topics where it might fire (e.g.
+  Topic 5 / welfare's "burden" language).
 
 ## Method notes
 

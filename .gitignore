@@ -16,6 +16,5 @@ env/
 .idea/
 *.swp
 
-# Output (regenerable)
-scores/
-*.log
+# Stray logs (but keep scores/ logs which document the runs)
+/*.log
