@@ -36,7 +36,9 @@ The pipeline:
 | [requirements.txt](requirements.txt) | Python dependencies |
 | [ctm_topics.csv](ctm_topics.csv) | Top-20 words per CTM topic |
 | [ctm_topics.json](ctm_topics.json) | CTM topic metadata (JSON form) |
-| [scores/](scores/) | MLM output: one CSV per topic + run logs |
+| [score_metaphors.py](score_metaphors.py) | (above) per-mention BERT MLM scoring |
+| [aggregate_scores.py](aggregate_scores.py) | Topic-level aggregation, log-ratios, permutation tests, heatmap |
+| [scores/](scores/) | Per-mention CSVs + topic-level summary + heatmap.png + run logs |
 | [scores_topic8_pilot.csv](scores_topic8_pilot.csv) | Original 500-segment pilot output (kept as a smaller reference) |
 
 ## Setup
@@ -102,7 +104,70 @@ All ten CTM topics scored end-to-end on a single RTX 4070 Ti
 | 8 | labor / agriculture | 26,951 | 25,652 | 0.95 |
 | 9 | quotas / national origins | 24,844 | 41,690 | 1.68 |
 
-### Early observations (pre-aggregation)
+### Topic-level results (1,000-permutation test, BH-adjusted)
+
+After dedup (354,600 → **320,689 mentions**, 33,911 exact-duplicate
+sentence pairs dropped), we compute per-topic mean score per category and
+log-ratio vs. the corpus mean. Permutation test on `mean(in_topic) -
+mean(out_of_topic)` with BH multiple-comparison correction across all 80
+(topic × category) cells.
+
+**Sample-size caveat:** with 320K mentions, statistical significance is
+essentially trivial — every cell has BH-adjusted q < 0.001. The
+substantive signal is in the **log-ratio magnitudes**, not the p-values.
+Reporting effect sizes is the right framing.
+
+#### Headline findings
+
+Standout per-topic effect sizes (log-ratios > +0.4 or < −0.5, all
+significant):
+
+- **Topic 8 (labor / agriculture) → `machine` (+1.00)**, `cargo` (+0.39),
+  `animal` (+0.34). Largest single per-topic effect in the entire
+  matrix. Labor speeches frame workers as machinery / equipment / livestock.
+  Threat: −0.57 (labor discourse is *not* threat-coded; it's economic).
+- **Topic 2 (border / enforcement) → `cargo` (+0.86)**, `animal` (+0.47),
+  `flood_tide` (+0.45), `threat` (+0.46). Border speeches commodify and
+  dehumanize the most. Notably `invasion` is **−0.21** here — border
+  discourse uses cargo/animal/threat metaphor more than military framing.
+- **Topic 3 (refugees / asylum) → `flood_tide` (+0.60)**. Refugees are
+  the strongest natural-disaster / liquid-flow framing in the corpus.
+  But `cargo` is **−0.63** — refugees are *not* commodified the way
+  border-crossers and laborers are.
+- **Topic 4 (heritage / contributions) → universally negative**: cargo
+  −2.05, threat −1.24, disease −1.21, animal −0.77, machine −0.77. The
+  "celebratory" topic uses essentially no metaphor framing — methodological
+  validation that the method tracks framing tone, not just any mention.
+- **Topic 0 (Chinese-era legal) → `invasion` (+0.53)**, `cargo` (+0.44).
+  Historical Chinese-exclusion discourse shows military + commodity
+  framing — consistent with Card et al.'s qualitative observations
+  about that era.
+- **Topic 5 (welfare / services) → `invasion` (−1.08)**, otherwise mostly
+  flat. Welfare debate avoids militarized framing; surprisingly, `threat`
+  is at corpus average (−0.02) despite the "burden on the system" trope.
+- **Topic 9 (quotas / national origins) → `cargo` (+0.52)**, `disease`
+  (+0.32). Quota debates commodify groups of people.
+- **Topic 6 (DACA / Dreamers) → `threat` (+0.36)**, `animal` (+0.23),
+  `cargo` (−0.66). DACA-era discourse is more animal/threat-framed and
+  much less commodity-framed.
+
+#### Heatmap
+
+[scores/heatmap.png](scores/heatmap.png) — log-ratios with significance
+annotations.
+
+#### Output files
+
+- [scores/topic_summary.csv](scores/topic_summary.csv) — long-format,
+  one row per (topic × category): means, log-ratios, raw + BH-adjusted
+  p-values, n_mentions
+- [scores/topic_means.csv](scores/topic_means.csv) — wide-format mean
+  matrix (topics × categories)
+- [scores/topic_log_ratios.csv](scores/topic_log_ratios.csv) —
+  wide-format log-ratio matrix (topics × categories)
+- [scores/heatmap.png](scores/heatmap.png) — rendered heatmap
+
+### Pre-aggregation observations (kept for historical record)
 
 - **Mention density itself is a finding.** Topic 2 (border / enforcement) has
   the lowest mention density of any *substantive* topic — even lower than the
