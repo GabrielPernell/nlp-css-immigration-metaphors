@@ -1,45 +1,10 @@
-# Immigration Metaphor Analysis (NLP for CSS Final Project)
+# Metaphors across topics in US Congressional Speech
 
-Per-subtopic analysis of metaphorical framing in U.S. congressional speeches on
-immigration. Builds on the dataset and dehumanization-detection method of
-[Card et al. 2022 (PNAS)](https://www.pnas.org/doi/10.1073/pnas.2120510119).
-
-## Project framing
-
-Card et al. measure dehumanizing metaphor usage across **party** (Democrat vs.
-Republican) and **nationality** (European vs. non-European) over the full
-corpus of U.S. immigration speeches. We ask a different question: holding party
-and nationality constant, **does metaphor usage vary across substantive
-subtopics of immigration discourse** (labor, refugees, welfare, border
-enforcement, etc.)?
-
-The pipeline:
-
-1. **Topic modeling** — a Contextualized Topic Model (CTM) is run over the
-   immigration-speech corpus to recover ~10 latent subtopics. Each segment is
-   labeled with its dominant topic.
-2. **Mention identification** — for each segment, find references to immigrants
-   (direct mentions, nationalities, nationality+role phrases).
-3. **MLM metaphor scoring** — replace the mention with `[MASK]`, run BERT,
-   score each metaphor category (animals, cargo, disease, flood/tide, machines,
-   vermin, invasion, threat) by summing P(mask = w) over a curated word list.
-4. **Per-topic comparison** — aggregate scores per topic, compute log-ratios
-   vs. the corpus mean, test significance with permutation tests.
-
-## Repo contents
-
-| File | Purpose |
-|---|---|
-| [mentions.py](mentions.py) | Regex-based mention identification (direct / nationality / nationality+role) with single-token head-noun masking |
-| [categories.py](categories.py) | Metaphor categories + word lists + WordPiece-vocab filter |
-| [score_metaphors.py](score_metaphors.py) | Main MLM scoring script (BERT + GPU batching) |
-| [requirements.txt](requirements.txt) | Python dependencies |
-| [ctm_topics.csv](ctm_topics.csv) | Top-20 words per CTM topic |
-| [ctm_topics.json](ctm_topics.json) | CTM topic metadata (JSON form) |
-| [score_metaphors.py](score_metaphors.py) | (above) per-mention BERT MLM scoring |
-| [aggregate_scores.py](aggregate_scores.py) | Topic-level aggregation, log-ratios, permutation tests, heatmap |
-| [scores/](scores/) | Per-mention CSVs + topic-level summary + heatmap.png + run logs |
-| [scores_topic8_pilot.csv](scores_topic8_pilot.csv) | Original 500-segment pilot output (kept as a smaller reference) |
+Code accompanying our NLP for CSS final project. Per-subtopic analysis of
+metaphorical framing in U.S. congressional immigration speeches, building on
+the [Card et al. 2022](https://www.pnas.org/doi/10.1073/pnas.2120510119)
+dataset and extending their masked-mention scoring approach to a per-topic
+axis of comparison.
 
 ## Setup
 
@@ -47,183 +12,51 @@ The pipeline:
 pip install -r requirements.txt
 ```
 
+Tested with Python 3.12, PyTorch 2.7 (CUDA), and `transformers` 4.51.
+
 ## Data
 
-The data is **not committed** to the repo (~500MB+). To reproduce:
+Input data is not included due to size. To reproduce:
 
-1. Download the Card et al. 2022 dataset from
+1. Obtain the Card et al. 2022 immigration-speeches dataset from
    [github.com/dallascard/us-immigration-speeches](https://github.com/dallascard/us-immigration-speeches).
-2. Run our CTM topic-modeling pipeline (see project notes — code lives in a
-   separate notebook) to produce `all_speeches_with_topic_probs.csv` and the
-   per-topic split files in `topic_speeches/topic_{0..9}.csv`.
-3. Place those alongside the scripts.
+2. Run `topic_model.py` to fit the CTM and produce per-topic CSVs in
+   `topic_speeches/`.
 
-## Running the MLM scorer
+## Pipeline
 
 ```bash
-# Pilot on a small sample (recommended first run)
-python score_metaphors.py --topic 8 --pilot 500 --out scores_topic8_pilot.csv
+# 1. Score every immigrant-mention with bert-base-uncased
+python score_metaphors.py --topic 0 1 2 3 4 5 6 7 8 9 --out-dir scores/
 
-# Full run on a single topic
-python score_metaphors.py --topic 8 --out scores/scores_topic_8.csv
-
-# Multiple topics, one CSV per topic
-python score_metaphors.py --topic 5 6 8 9 --out-dir scores/ --batch-size 64
+# 2. Aggregate to per-topic statistics + heatmap
+python aggregate_scores.py --scores-dir scores/
 ```
 
-The script auto-detects CUDA. On an RTX 4070 Ti, the 500-segment pilot takes
-~3 seconds; full topic runs (50K-60K segments each) finish in a few minutes.
+Step 1 auto-detects CUDA. On an RTX 4070 Ti the full ten-topic run
+(~270K segments, ~350K mentions) takes roughly 20 minutes.
 
-## Output schema
+## Files
 
-One row per (segment, sentence, mention). Columns:
+| File | Purpose |
+|---|---|
+| `topic_model.py` | CTM training and per-topic data partitioning |
+| `mentions.py` | Mention identification (direct / nationality / nationality+role) with head-noun-only masking |
+| `categories.py` | Metaphor category word lists + WordPiece-vocab filter |
+| `score_metaphors.py` | Per-mention BERT MLM scoring |
+| `aggregate_scores.py` | Per-topic aggregation, log-ratios, permutation tests, heatmap |
+| `ctm_topics.csv` / `.json` | Top-20 words per CTM topic |
+| `requirements.txt` | Python dependencies |
 
-- `segment_id`, `speech_id`, `date`, `party` — provenance from the source corpus
-- `sentence_idx` — index of the sentence within the segment
-- `mention_text`, `mention_type` (`direct` / `nationality` / `nat_role`)
-- `masked_sentence` — the input fed to BERT
-- `animal`, `cargo`, `disease`, `flood_tide`, `machine`, `vermin`,
-  `invasion`, `threat` — per-category probability mass at the `[MASK]` slot
+## Output
 
-## Run results
+`aggregate_scores.py` writes to `scores/`:
 
-All ten CTM topics scored end-to-end on a single RTX 4070 Ti
-(`bert-base-uncased`, batch size 64). Total: **273,475 segments processed,
-354,600 mentions scored** in ~19 minutes of GPU time (across two runs).
-
-| Topic | Theme | Segments | Mentions | Mentions / segment |
-|---|---|---:|---:|---:|
-| 0 | Chinese-era legal / citizenship | 30,974 | 44,168 | 1.43 |
-| 1 | (procedural junk) | 24,663 | 21,074 | 0.85 |
-| 2 | border / enforcement | 30,845 | 12,332 | **0.40** |
-| 3 | refugees / asylum | 29,683 | 72,831 | **2.45** |
-| 4 | heritage / contributions | 31,362 | 55,348 | 1.77 |
-| 5 | welfare / services | 25,876 | 40,980 | 1.58 |
-| 6 | DACA / Dreamers | 30,665 | 26,003 | 0.85 |
-| 7 | (incoherent junk) | 34,647 | 14,522 | 0.42 |
-| 8 | labor / agriculture | 26,951 | 25,652 | 0.95 |
-| 9 | quotas / national origins | 24,844 | 41,690 | 1.68 |
-
-### Topic-level results (1,000-permutation test, BH-adjusted)
-
-After dedup (354,600 → **320,689 mentions**, 33,911 exact-duplicate
-sentence pairs dropped), we compute per-topic mean score per category and
-log-ratio vs. the corpus mean. Permutation test on `mean(in_topic) -
-mean(out_of_topic)` with BH multiple-comparison correction across all 80
-(topic × category) cells.
-
-**Sample-size caveat:** with 320K mentions, statistical significance is
-essentially trivial — every cell has BH-adjusted q < 0.001. The
-substantive signal is in the **log-ratio magnitudes**, not the p-values.
-Reporting effect sizes is the right framing.
-
-#### Headline findings
-
-Standout per-topic effect sizes (log-ratios > +0.4 or < −0.5, all
-significant):
-
-- **Topic 8 (labor / agriculture) → `machine` (+1.00)**, `cargo` (+0.39),
-  `animal` (+0.34). Largest single per-topic effect in the entire
-  matrix. Labor speeches frame workers as machinery / equipment / livestock.
-  Threat: −0.57 (labor discourse is *not* threat-coded; it's economic).
-- **Topic 2 (border / enforcement) → `cargo` (+0.86)**, `animal` (+0.47),
-  `flood_tide` (+0.45), `threat` (+0.46). Border speeches commodify and
-  dehumanize the most. Notably `invasion` is **−0.21** here — border
-  discourse uses cargo/animal/threat metaphor more than military framing.
-- **Topic 3 (refugees / asylum) → `flood_tide` (+0.60)**. Refugees are
-  the strongest natural-disaster / liquid-flow framing in the corpus.
-  But `cargo` is **−0.63** — refugees are *not* commodified the way
-  border-crossers and laborers are.
-- **Topic 4 (heritage / contributions) → universally negative**: cargo
-  −2.05, threat −1.24, disease −1.21, animal −0.77, machine −0.77. The
-  "celebratory" topic uses essentially no metaphor framing — methodological
-  validation that the method tracks framing tone, not just any mention.
-- **Topic 0 (Chinese-era legal) → `invasion` (+0.53)**, `cargo` (+0.44).
-  Historical Chinese-exclusion discourse shows military + commodity
-  framing — consistent with Card et al.'s qualitative observations
-  about that era.
-- **Topic 5 (welfare / services) → `invasion` (−1.08)**, otherwise mostly
-  flat. Welfare debate avoids militarized framing; surprisingly, `threat`
-  is at corpus average (−0.02) despite the "burden on the system" trope.
-- **Topic 9 (quotas / national origins) → `cargo` (+0.52)**, `disease`
-  (+0.32). Quota debates commodify groups of people.
-- **Topic 6 (DACA / Dreamers) → `threat` (+0.36)**, `animal` (+0.23),
-  `cargo` (−0.66). DACA-era discourse is more animal/threat-framed and
-  much less commodity-framed.
-
-#### Heatmap
-
-[scores/heatmap.png](scores/heatmap.png) — log-ratios with significance
-annotations.
-
-#### Output files
-
-- [scores/topic_summary.csv](scores/topic_summary.csv) — long-format,
-  one row per (topic × category): means, log-ratios, raw + BH-adjusted
-  p-values, n_mentions
-- [scores/topic_means.csv](scores/topic_means.csv) — wide-format mean
-  matrix (topics × categories)
-- [scores/topic_log_ratios.csv](scores/topic_log_ratios.csv) —
-  wide-format log-ratio matrix (topics × categories)
-- [scores/heatmap.png](scores/heatmap.png) — rendered heatmap
-
-### Pre-aggregation observations (kept for historical record)
-
-- **Mention density itself is a finding.** Topic 2 (border / enforcement) has
-  the lowest mention density of any *substantive* topic — even lower than the
-  procedural-junk topics. Border discourse evidently uses more abstract framing
-  ("the border", "illegal immigration", "the law") rather than directly naming
-  people. Topic 3 (refugees) is the opposite extreme at 2.45 mentions/segment
-  — refugee discourse is heavily group-naming.
-- **Junk topics (1, 7) produce mentions but at low density.** Useful as a
-  baseline: any per-category metaphor scores from these topics should look
-  near-uniform / low-signal. If a substantive topic's per-category profile
-  doesn't look distinguishably different, that's a methodological warning.
-- **Pilot validation** (Topic 8, 500 segments, 1,097 mentions): score
-  distributions track intuition. Labor speeches show high signal on
-  `machine` / `cargo` / `animal` / `invasion` (max scores 0.13–0.34) and
-  near-zero signal on `flood_tide` / `vermin` / `disease` / `threat` (max
-  ≤0.007). Top-scoring sentences contain a mixture of genuine metaphor
-  ("the costs of *importing* Mexican [MASK]" → cargo) and BERT artifacts
-  ("Mexican [MASK] must be *recruited*" → invasion via military
-  vocabulary). Per-sentence scores are noisy by design; aggregate
-  topic-level means are the right unit of analysis. See
-  [scores_topic8_pilot.csv](scores_topic8_pilot.csv) for the full pilot
-  output.
-- **`invasion` and `threat` should stay separate categories.** On the
-  Topic 8 pilot, the two are nearly uncorrelated (Pearson r = 0.07) and
-  threat scores are ~100× smaller in magnitude than invasion scores.
-  Combining the two would effectively reduce to just `invasion` and
-  destroy any threat-specific signal in topics where it might fire (e.g.
-  Topic 5 / welfare's "burden" language).
-
-## Method notes
-
-- **Single-token masking only.** For multi-token phrases like "Mexican
-  laborers" we mask only the head noun (`Mexican [MASK]`), keeping the
-  nationality as context. Replacing both tokens with one `[MASK]` would
-  mismatch BERT's single-token mask slot.
-- **WordPiece filtering.** Each category's word list is filtered at runtime
-  to keep only terms that BERT tokenizes to a single piece — multi-piece
-  words can't be cleanly scored at one mask position. (Card et al. do the
-  same.)
-- **Per-sentence scores are noisy.** The method is meaningful in aggregate,
-  not at the individual-sentence level — Card et al. report a 0.73
-  correlation between BERT scores and human annotation. Topic-level means
-  with permutation tests are the right unit of analysis.
-
-## Relation to Card et al. 2022
-
-We **reimplement** their masked-mention scoring approach from scratch (no code
-reuse from their repo). Differences:
-
-- **New axis of comparison** — per-CTM-topic, rather than party or nationality.
-- **Two new categories** — `invasion` (military metaphor: invader, army,
-  attacker, troop) and `threat` (general danger: threat, menace, hazard,
-  burden), in addition to their original six.
-- **Topic coherence reporting** — NPMI / C_v scores for the CTM topics, which
-  Card et al. don't compute (they don't run topic modeling).
+- `topic_summary.csv` — long-format means, log-ratios, BH-adjusted p-values
+- `topic_means.csv` — wide-format mean matrix
+- `topic_log_ratios.csv` — wide-format log-ratio matrix
+- `heatmap.png` — heatmap visualization (Figure 1 of the report)
 
 ## Authors
 
-Gabe Pernell, Lily Wheeler — NLP for CSS, Spring 2026.
+Lily Wheeler, Gabriel Pernell — NLP for CSS, Spring 2026.

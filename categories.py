@@ -7,7 +7,7 @@ conceptually distinct: invasion is a military metaphor, threat is general
 danger language.
 
 Each category's words must be filtered against the BERT vocabulary at runtime
-to keep only single-WordPiece tokens — multi-piece words don't have a clean
+to keep only single-WordPiece tokens; multi-piece words don't have a clean
 P(w | context) under MLM scoring.
 """
 

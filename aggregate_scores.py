@@ -3,7 +3,7 @@
 Pipeline:
   1. Load all scores/scores_topic_*.csv into one DataFrame.
   2. Dedupe by masked_sentence (the pilot showed exact-duplicate sentences
-     in the source corpus — same speech entered into the Record twice).
+     in the source corpus, same speech entered into the Record twice).
   3. Per-topic per-category mean score.
   4. Log-ratio of each topic's mean vs. the corpus mean (Card et al.'s
      reporting style).

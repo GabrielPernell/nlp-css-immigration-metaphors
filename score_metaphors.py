@@ -5,13 +5,13 @@ mentions, mask each mention, run BERT MLM, and compute per-category
 scores by summing P(mask = w) over each category's word list.
 
 Method follows Card et al. 2022 ("Computational analysis of 140 years of
-US political speeches…", PNAS) — reimplemented from scratch.
+US political speeches…", PNAS), reimplemented from scratch.
 
 Usage:
     # Pilot run on 500 segments from topic 8
     python score_metaphors.py --topic 8 --pilot 500 --out scores_topic8_pilot.csv
 
-    # Full run on a topic (may take hours on CPU)
+    # Full run on a topic 
     python score_metaphors.py --topic 8 --out scores_topic8.csv
 
     # Run on multiple topics
